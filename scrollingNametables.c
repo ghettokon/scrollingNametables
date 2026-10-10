@@ -1,4 +1,3 @@
-
 #include <stdlib.h>
 #include <string.h>
 
@@ -21,6 +20,17 @@
 // VRAM update buffer
 #include "vrambuf.h"
 //#link "vrambuf.c"
+
+//#resource "pic0.nam"
+//#resource "pic1.nam"
+//#resource "pic2.nam"
+//#resource "pic3.nam"
+//#resource "pic4.nam"
+//#resource "pic5.nam"
+//#resource "pic6.nam"
+//#resource "pic7.nam"
+
+//#link "nametable_binary.s"
 
 /*{pal:"nes",layout:"nes"}*/
 const char PALETTE[32] = { 
