@@ -36,7 +36,7 @@ const unsigned char * const world_nametables[8] = {
 
 // Sample palette (Background palette 0)
 const unsigned char palette[16] = {
-    0x0F, 0x00, 0x10, 0x30, // Black background, Dark Gray, Light Gray, White
+    0x0f, 0x00, 0x10, 0x30, // Black background, Dark Gray, Light Gray, White
     0x0f, 0x00, 0x10, 0x30,
     0x0f, 0x00, 0x10, 0x30,
     0x0f, 0x00, 0x10, 0x30
@@ -44,12 +44,6 @@ const unsigned char palette[16] = {
 
 unsigned int cam_x = 0;
 unsigned int old_cam_x = 0;
-// Define VRAM buffer array (required by vrambuf module)
-// Place this near your other global variables
-
-// Define VRAM buffer array (required by vrambuf module)
-//unsigned char upddbuf[128];
-
 
 void update_nametable_column(unsigned int x_scroll) {
     unsigned int world_col;
@@ -75,7 +69,7 @@ void update_nametable_column(unsigned int x_scroll) {
 
     // Queue the vertical column write
     vrambuf_put(ppu_addr | VRAMBUF_VERT, col_slice, 30);
-    
+     
     // CRITICAL: Close the buffer stream with a terminator byte
     vrambuf_end();
 }
@@ -95,9 +89,6 @@ void main(void) {
     // Initialize vrambuf system
     vrambuf_clear();
     set_vram_update(updbuf);
-  
-  // Clear and set up Sprite 0 for the split scroll function
-
 
     // Enable rendering
     ppu_on_all();
