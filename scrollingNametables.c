@@ -15,6 +15,19 @@
 
 // Declare external assembly symbol exported in nametable.s
 extern const unsigned char nametable_0[];
+extern const unsigned char nametable_1[];
+extern const unsigned char nametable_2[];
+extern const unsigned char nametable_3[];
+extern const unsigned char nametable_4[];
+extern const unsigned char nametable_5[];
+extern const unsigned char nametable_6[];
+extern const unsigned char nametable_7[];
+
+// Create an array of pointers for easy indexing
+const unsigned char *const nametables[] = {
+    nametable_0, nametable_1, nametable_2, nametable_3,
+    nametable_4, nametable_5, nametable_6, nametable_7
+};
 
 // Sample palette (Background palette 0)
 const unsigned char palette[16] = {
