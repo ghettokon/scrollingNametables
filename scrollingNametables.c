@@ -42,23 +42,32 @@ unsigned int cam_x = 0;
 unsigned int old_cam_x = 0;
 unsigned char current_pair = 255; // Force initial load
 
+int last_screen = -1; // Tracks the last processed 256-pixel screen index
+
 void load_screens_for_position(unsigned int x) {
-    // Determine which screen pair (0 to 3) we are currently viewing
-    // Each screen is 256 pixels wide. Pair 0 = screens 0-1, Pair 1 = screens 2-3, etc.
-    unsigned char pair_index = (x >> 8) >> 1; 
+    int current_left_screen;
+    int upcoming_screen;
+    unsigned int target_vram;
+// Determine which 256-pixel screen is currently at the left edge of the viewport
+    current_left_screen = x >> 8;
     
-    if (pair_index != current_pair) {
-        current_pair = pair_index;
+    // Check if the camera has crossed into a new screen boundary
+    if (current_left_screen != last_screen) {
+        last_screen = current_left_screen;
         
-        ppu_off(); // Safe because we only do this when changing screen pairs
+        // The screen entering on the right side (ahead of the camera)
+        upcoming_screen = (current_left_screen + 1) & 7; // Wrap around at 8 (pic0 to pic7)
         
-        // Load left nametable ($2000)
-        vram_adr(0x2000);
-        vram_write(world_nametables[current_pair * 2], 960);
+        // Under horizontal mirroring, determine which VRAM address ($2000 or $2400) 
+        // corresponds to the off-screen nametable that just finished exiting on the left.
+        // Even screens map to $2000, odd screens map to $2400.
+        target_vram = (upcoming_screen & 1) ? 0x2400 : 0x2000;
         
-        // Load right nametable ($2400)
-        vram_adr(0x2400);
-        vram_write(world_nametables[(current_pair * 2) + 1], 960);
+        ppu_off(); // Safe because we only do this once per 256 pixels when a screen changes
+        
+        // Load the upcoming screen binary into the newly freed VRAM slot
+        vram_adr(target_vram);
+        vram_write(world_nametables[upcoming_screen], 960);
         
         ppu_on_all();
     }
