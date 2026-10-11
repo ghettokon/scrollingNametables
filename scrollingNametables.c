@@ -44,8 +44,10 @@ const unsigned char palette[16] = {
 
 unsigned int cam_x = 0;
 unsigned int old_cam_x = 0;
+unsigned char moving = 0;
 
-void update_nametable_column(unsigned int x_scroll) {
+void update_nametable_column(unsigned int x_scroll, int direction) {
+    // Declare all variables at the top (CC65 C89 requirement)
     unsigned int world_col;
     unsigned char screen_index;
     unsigned char local_col;
@@ -55,7 +57,15 @@ void update_nametable_column(unsigned int x_scroll) {
     unsigned char col_slice[30];
     unsigned char row;
 
-    world_col = (x_scroll >> 3) + 32;
+    // Determine which column to draw based on scroll direction
+    if (direction > 0) {
+        // Moving right: draw 32 tiles ahead on the right edge
+        world_col = (x_scroll >> 3) + 32;
+    } else {
+        // Moving left: draw at the current left edge of the screen
+        world_col = x_scroll >> 3;
+    }
+
     screen_index = (world_col >> 5) & 7;
     local_col = world_col & 31;
     
@@ -67,14 +77,18 @@ void update_nametable_column(unsigned int x_scroll) {
         col_slice[row] = table[(row * 32) + local_col];
     }
 
-    // Queue the vertical column write
+    // Queue the vertical column write and terminate stream
     vrambuf_put(ppu_addr | VRAMBUF_VERT, col_slice, 30);
-     
-    // CRITICAL: Close the buffer stream with a terminator byte
     vrambuf_end();
 }
 
 void main(void) {
+    // Declare all variables at the top of the function
+    unsigned char pad;
+    unsigned int cam_x = 0;
+    unsigned int old_cam_x = 0;
+    int scroll_dir = 0;
+  
     bank_bg(0);  // Backgrounds from $0000 (Font/Tiles)
     bank_spr(1); // Sprites from $1000 (Player)
     
@@ -95,21 +109,37 @@ void main(void) {
 
     // Infinite loop to keep rendering active
     while (1) {
-    // 1. Wait for vertical blanking interval start and clear buffer queue
-    ppu_wait_nmi();
-    //ppu_wait_frame();
-    vrambuf_clear();
+        ppu_wait_nmi();
+        vrambuf_clear();
 
-    // 2. Increment camera position and update hardware scrolling
-    cam_x++;
-    if (cam_x >= (256 * 8)) cam_x = 0;
-    scroll(cam_x, 0);
+        pad = pad_poll(0);
 
-    // 3. Queue a column update the exact moment the tile column shifts
-    if ((cam_x >> 3) != (old_cam_x >> 3)) {
-        update_nametable_column(cam_x);
-    }
-    old_cam_x = cam_x;
-      
+        // Determine scroll direction from D-pad
+        if (pad & PAD_RIGHT) {
+            scroll_dir = 1;
+        } else if (pad & PAD_LEFT) {
+            scroll_dir = -1;
+        } else {
+            scroll_dir = 0;
+        }
+
+        // Apply movement and update columns when moving
+        if (scroll_dir != 0) {
+            if (scroll_dir > 0) {
+                cam_x++;
+                if (cam_x >= (256 * 8)) cam_x = 0;
+            } else {
+                if (cam_x > 0) cam_x--;
+                else cam_x = (256 * 8) - 1;
+            }
+
+            scroll(cam_x, 0);
+
+            if ((cam_x >> 3) != (old_cam_x >> 3)) {
+                update_nametable_column(cam_x, scroll_dir);
+            }
+            old_cam_x = cam_x;
+        } 	
+  	vrambuf_end();
     }
 }
