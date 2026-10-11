@@ -17,7 +17,7 @@
 #include "vrambuf.h"
 //#link "vrambuf.c"
 
-//#define NES_MIRRORING 1
+#define NES_MIRRORING 1
 
 // Declare all 8 external nametables from your assembly file
 extern const unsigned char nametable_0[];
@@ -29,14 +29,14 @@ extern const unsigned char nametable_5[];
 extern const unsigned char nametable_6[];
 extern const unsigned char nametable_7[];
 
-const unsigned char *const world_nametables[] = {
+const unsigned char * const world_nametables[8] = {
     nametable_0, nametable_1, nametable_2, nametable_3,
     nametable_4, nametable_5, nametable_6, nametable_7
 };
 
 // Sample palette (Background palette 0)
 const unsigned char palette[16] = {
-    0x0f, 0x00, 0x10, 0x30, // Black background, Dark Gray, Light Gray, White
+    0x0F, 0x00, 0x10, 0x30, // Black background, Dark Gray, Light Gray, White
     0x0f, 0x00, 0x10, 0x30,
     0x0f, 0x00, 0x10, 0x30,
     0x0f, 0x00, 0x10, 0x30
@@ -48,7 +48,7 @@ unsigned int old_cam_x = 0;
 // Place this near your other global variables
 
 // Define VRAM buffer array (required by vrambuf module)
-unsigned char updbuf[128];
+//unsigned char upddbuf[128];
 
 
 void update_nametable_column(unsigned int x_scroll) {
@@ -73,11 +73,12 @@ void update_nametable_column(unsigned int x_scroll) {
         col_slice[row] = table[(row * 32) + local_col];
     }
 
+    // Queue the vertical column write
     vrambuf_put(ppu_addr | VRAMBUF_VERT, col_slice, 30);
+    
+    // CRITICAL: Close the buffer stream with a terminator byte
+    vrambuf_end();
 }
-
-unsigned char need_column_update = 0;
-unsigned int target_world_col = 0;
 
 void main(void) {
     bank_bg(0);  // Backgrounds from $0000 (Font/Tiles)
@@ -86,40 +87,38 @@ void main(void) {
     ppu_off();
     pal_bg(palette);
   
-    //set_vram_update(vram_update_buf);
-  
     vram_adr(0x2000);
-    vram_write(nametable_0, 960);
+    vram_write(nametable_0, 1024);
     vram_adr(0x2400);
-    vram_write(nametable_1, 960);
+    vram_write(nametable_1, 1024);
   
     // Initialize vrambuf system
     vrambuf_clear();
     set_vram_update(updbuf);
+  
+  // Clear and set up Sprite 0 for the split scroll function
+
 
     // Enable rendering
     ppu_on_all();
 
     // Infinite loop to keep rendering active
     while (1) {
-        // Advance camera position (adjust speed as needed)
-        cam_x++;
-        if (cam_x >= (256 * 8)) cam_x = 0;
-      
-        // Ensure VRAM buffer is cleared and synced at the start of the frame[cite: 4]
-        ppu_wait_nmi();[cite: 4]
-        vrambuf_clear();[cite: 4]
-      
-        // Update hardware scroll position
-        scroll(cam_x, 0);
+    // 1. Wait for vertical blanking interval start and clear buffer queue
+    ppu_wait_nmi();
+    //ppu_wait_frame();
+    vrambuf_clear();
 
-        // Queue a column update the exact moment the tile column shifts
-        if ((cam_x >> 3) != (old_cam_x >> 3)) {
-            update_nametable_column(cam_x);
-        }
-        old_cam_x = cam_x;
+    // 2. Increment camera position and update hardware scrolling
+    cam_x++;
+    if (cam_x >= (256 * 8)) cam_x = 0;
+    scroll(cam_x, 0);
 
-        // End the vrambuf queue so the NMI handler can flush it during VBLANK[cite: 4]
-        vrambuf_end();
+    // 3. Queue a column update the exact moment the tile column shifts
+    if ((cam_x >> 3) != (old_cam_x >> 3)) {
+        update_nametable_column(cam_x);
+    }
+    old_cam_x = cam_x;
+      
     }
 }
