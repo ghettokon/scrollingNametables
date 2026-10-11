@@ -41,6 +41,10 @@ const unsigned char palette[16] = {
 unsigned int cam_x = 0;
 unsigned int old_cam_x = 0;
 
+// Buffer format for NESLib: [PPU_HI, PPU_LO, 30 data bytes..., 0xFF (terminator)]
+// We use a size of 35 to safely fit headers, 30 bytes, and the end marker.
+unsigned char vram_update_buf[40];
+
 void load_nametable(unsigned char index) {
     ppu_off();
     vram_adr(0x2000);
@@ -58,28 +62,33 @@ void load_attributes_separately(const unsigned char *tiles, const unsigned char 
     vram_write(attributes, 64);
 }
 
-// Given a world column coordinate (0 to 255), get the correct tile from the 8 screens
-unsigned char get_world_tile(unsigned int world_col, unsigned char row) {
-    unsigned char screen_index = world_col >> 5; // Divide by 32 columns per screen
-    unsigned char local_col = world_col & 31;   // Modulo 32
-    
-    // Each nametable is 960 bytes (32 rows x 30 columns)
-    const unsigned char *table = world_nametables[screen_index];
-    return table[(row * 32) + local_col];
-}
-
 void update_nametable_column(unsigned int world_col) {
-    unsigned char screen_index = world_col >> 5;
-    unsigned char local_col = world_col & 31;
-    const unsigned char *table = world_nametables[screen_index];
+    unsigned char screen_index;
+    unsigned char local_col;
+    const unsigned char *table;
+    unsigned int base_addr;
+    unsigned int ppu_addr;
+    unsigned char row;
+
+    screen_index = world_col >> 5;  
+    local_col = world_col & 31;    
+    table = world_nametables[screen_index];
     
-    // Calculate PPU destination address based on column
-    // (Alternates between $2000 and $2400 depending on horizontal mirroring and nametable boundary)
-    unsigned int ppu_addr = 0x2000 + (local_col & 31); // Simplified base calculation
+    // Under horizontal mirroring, even screens map to $2000, odd to $2400
+    base_addr = (screen_index & 1) ? 0x2400 : 0x2000;
+    ppu_addr = base_addr + local_col;
     
-    vram_adr(ppu_addr);
-    // Write the column vertically (30 rows)
-    // Note: Writing vertical columns row-by-row requires a VRAM step setting or individual writes if step is 32.
+    // Native NESLib vertical buffer format:
+    // [High byte of PPU address | NT_UPD_VERT], [Low byte], [Length], [Data bytes...], [NT_UPD_EOF]
+    vram_update_buf[0] = (ppu_addr >> 8) | NT_UPD_VERT;
+    vram_update_buf[1] = ppu_addr & 0xff;
+    vram_update_buf[2] = 30; // Length of the vertical strip
+    
+    for (row = 0; row < 30; ++row) {
+        vram_update_buf[3 + row] = table[(row * 32) + local_col];
+    }
+    
+    vram_update_buf[33] = NT_UPD_EOF; // End of buffer marker (0xff)
 }
 
 void main(void) {
@@ -87,6 +96,8 @@ void main(void) {
     bank_spr(1); // Sprites from $1000 (Player)
     ppu_off();
     pal_bg(palette);
+  
+    set_vram_update(vram_update_buf);
   
     vram_adr(0x2000);
     vram_write(nametable_0, 960);
@@ -102,18 +113,19 @@ void main(void) {
         cam_x++;
         if (cam_x >= (256 * 8)) cam_x = 0; // Loop across all 8 screens (2048 pixels total)
 
+        ppu_wait_frame();
+      
         // Set hardware scroll position
         scroll(cam_x, 0);
 
         // Check if the camera crossed into a new tile column (every 8 pixels)
         if ((cam_x >> 3) != (old_cam_x >> 3)) {
             unsigned int new_col = (cam_x >> 3) + 32; // Look at the column just entering the right edge
-            
+            update_nametable_column(new_col);
             // Determine which nametable and local column this falls into
             // (A full column update function writes 30 bytes vertically to VRAM during VBLANK)
         }
-
-        old_cam_x = cam_x;
-        ppu_wait_frame();
+      	
+      	old_cam_x = cam_x;
     }
 }
