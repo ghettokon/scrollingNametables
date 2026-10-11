@@ -86,6 +86,7 @@ void main(void) {
     vram_write(nametable_0, 960);
     vram_adr(0x2400);
     vram_write(nametable_1, 960);
+    last_screen = 0;
 
     // Enable rendering
     ppu_on_all();
@@ -94,7 +95,10 @@ void main(void) {
     while (1) {
         // Advance camera position (adjust speed as needed)
         cam_x++;
-        if (cam_x >= (256 * 8)) cam_x = 0; // Loop across all 8 screens (2048 pixels total)
+        if (cam_x >= (256 * 8)) {
+            cam_x = 0;
+            last_screen = 0; // Seamlessly reset tracking on loop-back without triggering a flash!
+        }
 
         ppu_wait_frame();
       
@@ -102,7 +106,5 @@ void main(void) {
         scroll(cam_x, 0);
 
         load_screens_for_position(cam_x);
-      	
-      	old_cam_x = cam_x;
     }
 }
