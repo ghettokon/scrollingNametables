@@ -13,7 +13,11 @@
 #include <nes.h>
 #include "neslib.h"
 
-#define NES_MIRRORING 1
+// VRAM update buffer module
+#include "vrambuf.h"
+//#link "vrambuf.c"
+
+//#define NES_MIRRORING 1
 
 // Declare all 8 external nametables from your assembly file
 extern const unsigned char nametable_0[];
@@ -40,38 +44,40 @@ const unsigned char palette[16] = {
 
 unsigned int cam_x = 0;
 unsigned int old_cam_x = 0;
-unsigned char current_pair = 255; // Force initial load
+// Define VRAM buffer array (required by vrambuf module)
+// Place this near your other global variables
 
-int last_screen = -1; // Tracks the last processed 256-pixel screen index
+// Define VRAM buffer array (required by vrambuf module)
+unsigned char updbuf[128];
 
-void load_screens_for_position(unsigned int x) {
-    int current_left_screen;
-    int upcoming_screen;
-    unsigned int target_vram;
-// Determine which 256-pixel screen is currently at the left edge of the viewport
-    current_left_screen = x >> 8;
+
+void update_nametable_column(unsigned int x_scroll) {
+    unsigned int world_col;
+    unsigned char screen_index;
+    unsigned char local_col;
+    const unsigned char *table;
+    unsigned int base_addr;
+    unsigned int ppu_addr;
+    unsigned char col_slice[30];
+    unsigned char row;
+
+    world_col = (x_scroll >> 3) + 32;
+    screen_index = (world_col >> 5) & 7;
+    local_col = world_col & 31;
     
-    // Check if the camera has crossed into a new screen boundary
-    if (current_left_screen != last_screen) {
-        last_screen = current_left_screen;
-        
-        // The screen entering on the right side (ahead of the camera)
-        upcoming_screen = (current_left_screen + 1) & 7; // Wrap around at 8 (pic0 to pic7)
-        
-        // Under horizontal mirroring, determine which VRAM address ($2000 or $2400) 
-        // corresponds to the off-screen nametable that just finished exiting on the left.
-        // Even screens map to $2000, odd screens map to $2400.
-        target_vram = (upcoming_screen & 1) ? 0x2400 : 0x2000;
-        
-        ppu_off(); // Safe because we only do this once per 256 pixels when a screen changes
-        
-        // Load the upcoming screen binary into the newly freed VRAM slot
-        vram_adr(target_vram);
-        vram_write(world_nametables[upcoming_screen], 960);
-        
-        ppu_on_all();
+    table = world_nametables[screen_index];
+    base_addr = (screen_index & 1) ? 0x2400 : 0x2000;
+    ppu_addr = base_addr + local_col;
+
+    for (row = 0; row < 30; ++row) {
+        col_slice[row] = table[(row * 32) + local_col];
     }
+
+    vrambuf_put(ppu_addr | VRAMBUF_VERT, col_slice, 30);
 }
+
+unsigned char need_column_update = 0;
+unsigned int target_world_col = 0;
 
 void main(void) {
     bank_bg(0);  // Backgrounds from $0000 (Font/Tiles)
@@ -86,7 +92,10 @@ void main(void) {
     vram_write(nametable_0, 960);
     vram_adr(0x2400);
     vram_write(nametable_1, 960);
-    last_screen = 0;
+  
+    // Initialize vrambuf system
+    vrambuf_clear();
+    set_vram_update(updbuf);
 
     // Enable rendering
     ppu_on_all();
@@ -95,16 +104,22 @@ void main(void) {
     while (1) {
         // Advance camera position (adjust speed as needed)
         cam_x++;
-        if (cam_x >= (256 * 8)) {
-            cam_x = 0;
-            last_screen = 0; // Seamlessly reset tracking on loop-back without triggering a flash!
-        }
-
-        ppu_wait_frame();
+        if (cam_x >= (256 * 8)) cam_x = 0;
       
-        // Set hardware scroll position
+        // Ensure VRAM buffer is cleared and synced at the start of the frame[cite: 4]
+        ppu_wait_nmi();[cite: 4]
+        vrambuf_clear();[cite: 4]
+      
+        // Update hardware scroll position
         scroll(cam_x, 0);
 
-        load_screens_for_position(cam_x);
+        // Queue a column update the exact moment the tile column shifts
+        if ((cam_x >> 3) != (old_cam_x >> 3)) {
+            update_nametable_column(cam_x);
+        }
+        old_cam_x = cam_x;
+
+        // End the vrambuf queue so the NMI handler can flush it during VBLANK[cite: 4]
+        vrambuf_end();
     }
 }
