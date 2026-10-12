@@ -6,6 +6,7 @@
 //#resource "pic5.nam"
 //#resource "pic6.nam"
 //#resource "pic7.nam"
+//#resource "my.chr"
 
 //#link "nametable_binary.s"
 //#link "chr_generic.s"
