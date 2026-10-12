@@ -43,7 +43,7 @@ const unsigned char * const world_nametables[8] = {
 const unsigned char bg_palette[16] = {
     0x0f, 0x25, 0x2C, 0x30, // background colors
     0x0f, 0x00, 0x10, 0x30, 
-    0x0f, 0x00, 0x10, 0x30,
+    0x0f, 0x0A, 0x1A, 0x2A,
     0x0f, 0x00, 0x10, 0x30
 };
 // Sample palette (Sprite palette)
@@ -261,7 +261,7 @@ void main(void) {
     unsigned char pad_prev = 0;
   
     bank_spr(0); // Sprites from $1000 (Player)
-    bank_bg(0);  // Backgrounds from $0000 (Font/Tiles)
+    bank_bg(1);  // Backgrounds from $0000 (Font/Tiles)
     
     ppu_off();
     pal_spr(sprite_palette);
