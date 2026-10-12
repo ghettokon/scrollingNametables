@@ -18,7 +18,7 @@
 #define NES_MIRRORING 1
 
 // Physics Constants
-#define FLOOR_Y     180
+#define FLOOR_Y     190
 #define PLAYER_X    32
 #define GRAVITY     1
 #define JUMP_FORCE -6
